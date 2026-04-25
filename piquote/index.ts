@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
-import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import { parse } from "yaml";
 
 type QuoteEntry = {
@@ -11,7 +11,6 @@ type QuoteEntry = {
 };
 
 type Category = "tips" | "quotes";
-type PiquoteStyle = "minimal-1" | "minimal-2" | "balanced";
 
 type LoadedConfig = {
 	tips: QuoteEntry[];
@@ -20,7 +19,7 @@ type LoadedConfig = {
 
 const DEFAULT_WORKING_MESSAGE = "working...";
 const CONFIG_PATH = path.join(os.homedir(), ".pi", "agent", "piquote", "quotes.yaml");
-const PROGRESS_FRAMES = ["▱▱▱▱", "▰▱▱▱", "▰▰▱▱", "▰▰▰▱", "▰▰▰▰"] as const;
+const HOLD_AFTER_RESPONSE_MS = 1500;
 
 function clamp(value: number, min: number, max: number): number {
 	return Math.min(max, Math.max(min, value));
@@ -58,17 +57,6 @@ function getRotationSeconds(text: string): number {
 	return clamp(text.length / 8, 3, 12);
 }
 
-function styleDescription(style: PiquoteStyle): string {
-	switch (style) {
-		case "minimal-1":
-			return "pulse indicator + static text";
-		case "minimal-2":
-			return "pulse indicator + progress trail";
-		case "balanced":
-			return "pulse indicator + typewriter reveal";
-	}
-}
-
 async function loadConfig(): Promise<LoadedConfig> {
 	const raw = await readFile(CONFIG_PATH, "utf8");
 	const parsed = parse(raw) as Record<string, unknown> | null;
@@ -83,32 +71,27 @@ async function loadConfig(): Promise<LoadedConfig> {
 }
 
 export default function (pi: ExtensionAPI) {
-	let rotationTimer: NodeJS.Timeout | undefined;
-	let effectTimer: NodeJS.Timeout | undefined;
+	let timer: NodeJS.Timeout | undefined;
+	let holdTimer: NodeJS.Timeout | undefined;
 	let activeCtx: ExtensionContext | undefined;
 	let warnedConfigIssue = false;
-	let styleMode: PiquoteStyle = "balanced";
-	let currentBaseMessage = DEFAULT_WORKING_MESSAGE;
-	let effectVersion = 0;
+	let lastShownMessage = DEFAULT_WORKING_MESSAGE;
 
 	const stopRotation = () => {
-		if (rotationTimer) {
-			clearTimeout(rotationTimer);
-			rotationTimer = undefined;
+		if (timer) {
+			clearTimeout(timer);
+			timer = undefined;
 		}
 	};
 
-	const stopTextEffect = () => {
-		effectVersion++;
-		if (effectTimer) {
-			clearTimeout(effectTimer);
-			effectTimer = undefined;
+	const clearHold = (ctx?: ExtensionContext) => {
+		if (holdTimer) {
+			clearTimeout(holdTimer);
+			holdTimer = undefined;
 		}
-	};
-
-	const stopAll = () => {
-		stopRotation();
-		stopTextEffect();
+		if (ctx) {
+			ctx.ui.setStatus("piquote-hold", undefined);
+		}
 	};
 
 	const warnOnce = (ctx: ExtensionContext, message: string) => {
@@ -151,88 +134,15 @@ export default function (pi: ExtensionAPI) {
 		}
 	};
 
-	const getPulseIndicator = (ctx: ExtensionContext): WorkingIndicatorOptions => ({
-		frames: [
-			ctx.ui.theme.fg("dim", "◌"),
-			ctx.ui.theme.fg("muted", "○"),
-			ctx.ui.theme.fg("accent", "◍"),
-			ctx.ui.theme.fg("accent", "●"),
-			ctx.ui.theme.fg("accent", "◍"),
-			ctx.ui.theme.fg("muted", "○"),
-		],
-		intervalMs: 120,
-	});
-
-	const applyWorkingIndicator = (ctx: ExtensionContext) => {
-		ctx.ui.setWorkingIndicator(getPulseIndicator(ctx));
-	};
-
-	const startTextEffect = (ctx: ExtensionContext, baseMessage: string) => {
-		stopTextEffect();
-		const thisEffect = effectVersion;
-
-		if (styleMode === "minimal-1") {
-			ctx.ui.setWorkingMessage(baseMessage);
-			return;
-		}
-
-		if (styleMode === "minimal-2") {
-			let frame = 0;
-			const tick = () => {
-				if (thisEffect !== effectVersion) return;
-				if (!activeCtx || activeCtx.isIdle()) {
-					stopTextEffect();
-					return;
-				}
-				ctx.ui.setWorkingMessage(`${baseMessage} ${PROGRESS_FRAMES[frame]}`);
-				frame = (frame + 1) % PROGRESS_FRAMES.length;
-				effectTimer = setTimeout(tick, 220);
-			};
-			tick();
-			return;
-		}
-
-		if (ctx.isIdle()) {
-			ctx.ui.setWorkingMessage(baseMessage);
-			return;
-		}
-
-		const chars = Array.from(baseMessage);
-		let index = Math.min(1, chars.length);
-		ctx.ui.setWorkingMessage(chars.slice(0, index).join(""));
-
-		const tick = () => {
-			if (thisEffect !== effectVersion) return;
-			if (!activeCtx || activeCtx.isIdle()) {
-				stopTextEffect();
-				return;
-			}
-			index = Math.min(chars.length, index + 1);
-			ctx.ui.setWorkingMessage(chars.slice(0, index).join(""));
-			if (index >= chars.length) {
-				stopTextEffect();
-				return;
-			}
-			effectTimer = setTimeout(tick, 55);
-		};
-
-		effectTimer = setTimeout(tick, 55);
-	};
-
-	const renderCurrentMessage = (ctx: ExtensionContext) => {
-		applyWorkingIndicator(ctx);
-		startTextEffect(ctx, currentBaseMessage);
-	};
-
 	const scheduleNext = async (ctx: ExtensionContext) => {
 		activeCtx = ctx;
-		currentBaseMessage = await pickMessage(ctx);
-		renderCurrentMessage(ctx);
-
-		const delayMs = Math.round(getRotationSeconds(currentBaseMessage) * 1000);
-		rotationTimer = setTimeout(() => {
+		const message = await pickMessage(ctx);
+		lastShownMessage = message;
+		ctx.ui.setWorkingMessage(message);
+		const delayMs = Math.round(getRotationSeconds(message) * 1000);
+		timer = setTimeout(() => {
 			if (!activeCtx || activeCtx.isIdle()) {
-				stopAll();
+				stopRotation();
 				return;
 			}
 			void scheduleNext(activeCtx);
@@ -240,14 +150,16 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const startRotation = async (ctx: ExtensionContext) => {
-		stopAll();
+		clearHold(ctx);
+		stopRotation();
 		await scheduleNext(ctx);
 	};
 
 	pi.on("session_start", async (_event, ctx) => {
 		activeCtx = ctx;
+		clearHold(ctx);
+		lastShownMessage = DEFAULT_WORKING_MESSAGE;
 		ctx.ui.setWorkingMessage(DEFAULT_WORKING_MESSAGE);
-		applyWorkingIndicator(ctx);
 	});
 
 	pi.on("agent_start", async (_event, ctx) => {
@@ -255,12 +167,19 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("agent_end", async (_event, ctx) => {
-		stopAll();
+		stopRotation();
 		activeCtx = ctx;
+
+		ctx.ui.setStatus("piquote-hold", ctx.ui.theme.fg("dim", lastShownMessage));
+		holdTimer = setTimeout(() => {
+			activeCtx?.ui.setStatus("piquote-hold", undefined);
+			holdTimer = undefined;
+		}, HOLD_AFTER_RESPONSE_MS);
 	});
 
 	pi.on("session_shutdown", async () => {
-		stopAll();
+		stopRotation();
+		clearHold(activeCtx);
 		activeCtx = undefined;
 	});
 
@@ -268,51 +187,10 @@ export default function (pi: ExtensionAPI) {
 		description: "Reload piquote YAML config and preview one random message",
 		handler: async (_args, ctx) => {
 			warnedConfigIssue = false;
-			currentBaseMessage = await pickMessage(ctx);
-			renderCurrentMessage(ctx);
-			ctx.ui.notify(`piquote loaded: ${currentBaseMessage}`, "info");
-		},
-	});
-
-	pi.registerCommand("piquote-style", {
-		description: "Set piquote style with a selector modal",
-		getArgumentCompletions: (prefix) => {
-			const styles: PiquoteStyle[] = ["minimal-1", "minimal-2", "balanced"];
-			const filtered = styles.filter((style) => style.startsWith(prefix.toLowerCase()));
-			return filtered.length > 0 ? filtered.map((style) => ({ value: style, label: style })) : null;
-		},
-		handler: async (args, ctx) => {
-			const parsed = args.trim().toLowerCase();
-			const directArg =
-				parsed === "minimal-1" || parsed === "minimal-2" || parsed === "balanced"
-					? (parsed as PiquoteStyle)
-					: undefined;
-
-			const options: Array<{ mode: PiquoteStyle; label: string }> = [
-				{ mode: "minimal-1", label: "minimal-1 — pulse + static  (e.g. \"Ship small changes.\")" },
-				{ mode: "minimal-2", label: "minimal-2 — pulse + trail   (e.g. \"Ship small changes. ▰▰▱▱\")" },
-				{ mode: "balanced", label: "balanced — pulse + reveal   (e.g. \"Ship sm...\" -> \"Ship small changes.\")" },
-			];
-
-			let nextStyle = directArg;
-			if (!nextStyle) {
-				if (!ctx.hasUI) {
-					ctx.ui.notify("In non-interactive mode, pass an argument: /piquote-style minimal-1|minimal-2|balanced", "error");
-					return;
-				}
-				const selectedLabel = await ctx.ui.select("Choose piquote style", options.map((o) => o.label));
-				if (!selectedLabel) return;
-				nextStyle = options.find((o) => o.label === selectedLabel)?.mode;
-				if (!nextStyle) return;
-			}
-
-			styleMode = nextStyle;
-			if (!ctx.isIdle()) {
-				renderCurrentMessage(ctx);
-			} else {
-				applyWorkingIndicator(ctx);
-			}
-			ctx.ui.notify(`piquote style set: ${styleMode} (${styleDescription(styleMode)})`, "info");
+			const message = await pickMessage(ctx);
+			lastShownMessage = message;
+			ctx.ui.setWorkingMessage(message);
+			ctx.ui.notify(`piquote loaded: ${message}`, "info");
 		},
 	});
 }

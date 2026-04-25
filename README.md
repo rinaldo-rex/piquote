@@ -84,6 +84,7 @@ YAML
 - Category choice: random each refresh
 - Item choice: random within category
 - Rotation interval: `seconds = clamp(chars / 8, 3..12)`
+- In balanced mode, keeps each message visible for at least 2s after full typewriter reveal
 - Missing/invalid config: warn once, fallback to `working...`
 
 ## Development layout
