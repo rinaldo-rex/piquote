@@ -9,8 +9,9 @@ Versioning uses CalVer: `YYYY.M.D` (for example `2026.4.25`).
 - On package install, creates `~/.pi/agent/piquote/quotes.yaml` from the example if missing (never overwrites existing file)
 
 - Reads config from: `~/.pi/agent/piquote/quotes.yaml`
-- Schema: `tips.items` and `quotes.items`
-- Picks category randomly each refresh (`tips` or `quotes`)
+- Schema: `tips.items`, `quotes.items`, and `custom.items`
+- Picks category randomly each refresh (`tips`, `quotes`, or `custom`)
+- Custom quotes can be added at runtime with `/piquote-add`
 - Picks a random item inside that category
 - Rotation interval: `seconds = clamp(chars / 8, 3..12)`
 - If config is missing/invalid/empty: warns once, then falls back to `working...`
@@ -43,6 +44,7 @@ Then run `/reload` in Pi.
 - `/piquote-reload` - reloads YAML and previews one random message immediately.
 - `/piquote-style` - opens a selector modal to choose visual style.
 - `/piquote-style [minimal-1|minimal-2|balanced]` - set style directly via argument.
+- `/piquote-add "text ~author"` - adds a custom quote to the `custom` category in `quotes.yaml`. Author is optional; use `~` at the end for text only.
 
 ### Styles
 
@@ -61,4 +63,12 @@ quotes:
   items:
     - text: "Simplicity is prerequisite for reliability."
       author: "Edsger W. Dijkstra"
+
+# Added at runtime via /piquote-add
+custom:
+  items:
+    - text: "Don't tell me you're reading all the above text!"
+      author: "Rex"
 ```
+
+> **Note:** You can also manually add entries to the `custom` section. They'll be picked randomly along with `tips` and `quotes`.

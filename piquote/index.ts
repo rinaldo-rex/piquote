@@ -1,21 +1,23 @@
-import { readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@mariozechner/pi-coding-agent";
-import { parse } from "yaml";
+import { parse, stringify } from "yaml";
 
 type QuoteEntry = {
 	text: string;
 	author?: string;
 };
 
-type Category = "tips" | "quotes";
+type Category = "tips" | "quotes" | "custom";
+
 type PiquoteStyle = "minimal-1" | "minimal-2" | "balanced";
 
 type LoadedConfig = {
 	tips: QuoteEntry[];
 	quotes: QuoteEntry[];
+	custom: QuoteEntry[];
 };
 
 const DEFAULT_WORKING_MESSAGE = "working...";
@@ -50,7 +52,7 @@ function normalizeEntries(value: unknown): QuoteEntry[] {
 }
 
 function formatEntry(category: Category, entry: QuoteEntry): string {
-	if (category === "quotes" && entry.author) {
+	if ((category === "quotes" || category === "custom") && entry.author) {
 		return `${entry.text} — ${entry.author}`;
 	}
 	return entry.text;
@@ -71,17 +73,66 @@ function styleDescription(style: PiquoteStyle): string {
 	}
 }
 
+function parseAddArgument(rawInput: string): { text: string; author?: string } | null {
+	const trimmed = rawInput.trim();
+	if (!trimmed) return null;
+
+	// Split on the last "~" to separate text and author
+	const lastTildeIndex = trimmed.lastIndexOf("~");
+	if (lastTildeIndex === -1) {
+		return { text: trimmed };
+	}
+
+	const textPart = trimmed.slice(0, lastTildeIndex).trim();
+	const authorPart = trimmed.slice(lastTildeIndex + 1).trim();
+
+	if (!textPart) return null;
+
+	return { text: textPart, author: authorPart || undefined };
+}
+
 async function loadConfig(): Promise<LoadedConfig> {
 	const raw = await readFile(CONFIG_PATH, "utf8");
 	const parsed = parse(raw) as Record<string, unknown> | null;
 	const tipsSection = parsed && typeof parsed === "object" ? (parsed.tips as Record<string, unknown> | undefined) : undefined;
 	const quotesSection =
 		parsed && typeof parsed === "object" ? (parsed.quotes as Record<string, unknown> | undefined) : undefined;
+	const customSection =
+		parsed && typeof parsed === "object" ? (parsed.custom as Record<string, unknown> | undefined) : undefined;
 
 	return {
 		tips: normalizeEntries(tipsSection?.items),
 		quotes: normalizeEntries(quotesSection?.items),
+		custom: normalizeEntries(customSection?.items),
 	};
+}
+
+async function appendToCustom(entry: QuoteEntry): Promise<void> {
+	// Ensure config directory exists
+	await mkdir(path.dirname(CONFIG_PATH), { recursive: true });
+
+	let config: Record<string, unknown>;
+
+	try {
+		const configRaw = await readFile(CONFIG_PATH, "utf8");
+		config = parse(configRaw) as Record<string, unknown>;
+	} catch (readError) {
+		// If file doesn't exist or is invalid, start fresh
+		config = {};
+	}
+
+	// Ensure structure exists
+	if (!config.custom) {
+		config.custom = { items: [] };
+	} else if (!Array.isArray((config.custom as Record<string, unknown>).items)) {
+		(config.custom as Record<string, unknown>).items = [];
+	}
+
+	const customItems = (config.custom as Record<string, unknown>).items as QuoteEntry[];
+	customItems.push(entry);
+
+	const yamlString = stringify(config, null, 2);
+	await writeFile(CONFIG_PATH, yamlString, "utf8");
 }
 
 export default function (pi: ExtensionAPI) {
@@ -128,11 +179,12 @@ export default function (pi: ExtensionAPI) {
 			const categories: Category[] = [];
 			if (config.tips.length > 0) categories.push("tips");
 			if (config.quotes.length > 0) categories.push("quotes");
+			if (config.custom.length > 0) categories.push("custom");
 
 			if (categories.length === 0) {
 				warnOnce(
 					ctx,
-					`No valid tips/quotes found in ${CONFIG_PATH}. Falling back to \"${DEFAULT_WORKING_MESSAGE}\".`,
+					`No valid tips/quotes found in ${CONFIG_PATH}. Falling back to "${DEFAULT_WORKING_MESSAGE}".`,
 				);
 				return DEFAULT_WORKING_MESSAGE;
 			}
@@ -145,7 +197,7 @@ export default function (pi: ExtensionAPI) {
 			const reason = error instanceof Error ? error.message : String(error);
 			warnOnce(
 				ctx,
-				`Could not read ${CONFIG_PATH} (${reason}). Falling back to \"${DEFAULT_WORKING_MESSAGE}\".`,
+				`Could not read ${CONFIG_PATH} (${reason}). Falling back to "${DEFAULT_WORKING_MESSAGE}".`,
 			);
 			return DEFAULT_WORKING_MESSAGE;
 		}
@@ -178,14 +230,19 @@ export default function (pi: ExtensionAPI) {
 
 		if (styleMode === "minimal-2") {
 			let frame = 0;
+			ctx.ui.setWorkingMessage(`${baseMessage} ${PROGRESS_FRAMES[frame]}`);
 			const tick = () => {
 				if (thisEffect !== effectVersion) return;
 				if (!activeCtx || activeCtx.isIdle()) {
 					stopTextEffect();
+					// Restore full message (without progress indicator)
+					if (activeCtx && currentBaseMessage) {
+						activeCtx.ui.setWorkingMessage(currentBaseMessage);
+					}
 					return;
 				}
-				ctx.ui.setWorkingMessage(`${baseMessage} ${PROGRESS_FRAMES[frame]}`);
 				frame = (frame + 1) % PROGRESS_FRAMES.length;
+				ctx.ui.setWorkingMessage(`${baseMessage} ${PROGRESS_FRAMES[frame]}`);
 				effectTimer = setTimeout(tick, 220);
 			};
 			tick();
@@ -206,6 +263,10 @@ export default function (pi: ExtensionAPI) {
 			if (thisEffect !== effectVersion) return;
 			if (!activeCtx || activeCtx.isIdle()) {
 				stopTextEffect();
+				// Restore full message
+				if (activeCtx && currentBaseMessage) {
+					activeCtx.ui.setWorkingMessage(currentBaseMessage);
+				}
 				return;
 			}
 			index = Math.min(chars.length, index + TYPEWRITER_CHARS_PER_STEP);
@@ -221,7 +282,7 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const renderCurrentMessage = (ctx: ExtensionContext) => {
-		applyWorkingIndicator(ctx);
+		// Indicator is set once at session start; don't reapply on each rotation to avoid stutter
 		startTextEffect(ctx, currentBaseMessage);
 	};
 
@@ -234,6 +295,10 @@ export default function (pi: ExtensionAPI) {
 		rotationTimer = setTimeout(() => {
 			if (!activeCtx || activeCtx.isIdle()) {
 				stopAll();
+				// Restore full message if we're stopping due to idle
+				if (activeCtx && currentBaseMessage) {
+					activeCtx.ui.setWorkingMessage(currentBaseMessage);
+				}
 				return;
 			}
 			void scheduleNext(activeCtx);
@@ -258,6 +323,10 @@ export default function (pi: ExtensionAPI) {
 	pi.on("agent_end", async (_event, ctx) => {
 		stopAll();
 		activeCtx = ctx;
+		// Ensure full message is shown if typewriter was interrupted
+		if (currentBaseMessage) {
+			ctx.ui.setWorkingMessage(currentBaseMessage);
+		}
 	});
 
 	pi.on("session_shutdown", async () => {
@@ -308,9 +377,32 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			styleMode = nextStyle;
-			if (!ctx.isIdle()) renderCurrentMessage(ctx);
-			else applyWorkingIndicator(ctx);
+			if (!ctx.isIdle()) {
+				renderCurrentMessage(ctx);
+			} else {
+				applyWorkingIndicator(ctx);
+			}
 			ctx.ui.notify(`piquote style set: ${styleMode} (${styleDescription(styleMode)})`, "info");
+		},
+	});
+
+	pi.registerCommand("piquote-add", {
+		description: "Add a custom quote to ~/.pi/agent/piquote/quotes.yaml under the 'custom' category. Usage: /piquote-add \"text ~author\" (author optional) or /piquote-add \"text\"",
+		handler: async (args, ctx) => {
+			const parsed = parseAddArgument(args);
+			if (!parsed) {
+				ctx.ui.notify('Invalid input. Usage: /piquote-add "Don\'t tell me you\'re reading all the above text! ~Rex" or /piquote-add "Just some text"', "error");
+				return;
+			}
+
+			try {
+				await appendToCustom({ text: parsed.text, author: parsed.author });
+				const display = parsed.author ? `${parsed.text} — ${parsed.author}` : parsed.text;
+				ctx.ui.notify(`✓ Added to custom: ${display}`, "success");
+			} catch (error) {
+				const reason = error instanceof Error ? error.message : String(error);
+				ctx.ui.notify(`Failed to add custom quote: ${reason}`, "error");
+			}
 		},
 	});
 }
