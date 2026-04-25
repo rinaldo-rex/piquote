@@ -2,6 +2,8 @@
 
 Replaces Pi's default `working...` text (above the footer) with random tips/quotes while the agent is working.
 
+Versioning uses CalVer: `YYYY.M.D` (for example `2026.4.25`).
+
 ## Behavior
 
 - Reads config from: `~/.pi/agent/piquote/quotes.yaml`
@@ -12,6 +14,18 @@ Replaces Pi's default `working...` text (above the footer) with random tips/quot
 - If config is missing/invalid/empty: warns once, then falls back to `working...`
 
 ## Install
+
+### Preferred: install as a Pi package from git
+
+```bash
+pi install git:github.com/rinaldo-rex/piquote
+# or project-local
+pi install -l git:github.com/rinaldo-rex/piquote
+```
+
+Then run `/reload` in Pi.
+
+### Manual local extension install
 
 1. Copy this folder into Pi's extensions directory:
    - `~/.pi/agent/extensions/piquote/`
