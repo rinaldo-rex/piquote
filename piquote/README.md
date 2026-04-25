@@ -22,9 +22,17 @@ Replaces Pi's default `working...` text (above the footer) with random tips/quot
    - `cp ~/.pi/agent/extensions/piquote/quotes.yaml.example ~/.pi/agent/piquote/quotes.yaml`
 4. In Pi, run `/reload`
 
-## Optional command
+## Optional commands
 
 - `/piquote-reload` - reloads YAML and previews one random message immediately.
+- `/piquote-style` - opens a selector modal to choose visual style.
+- `/piquote-style [minimal-1|minimal-2|balanced]` - set style directly via argument.
+
+### Styles
+
+- `minimal-1`: pulse indicator + static text
+- `minimal-2`: pulse indicator + progress trail (`▱▱▱▱` ... `▰▰▰▰`)
+- `balanced` (default): pulse indicator + typewriter reveal
 
 ## YAML format
 
