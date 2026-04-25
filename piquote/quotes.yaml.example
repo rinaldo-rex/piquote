@@ -1,0 +1,14 @@
+tips:
+  items:
+    - text: "Use /plan first for larger tasks to keep changes predictable."
+    - text: "Run focused tests before full suite to speed up feedback."
+    - text: "Prefer small, reviewable commits over one giant commit."
+
+quotes:
+  items:
+    - text: "Simplicity is prerequisite for reliability."
+      author: "Edsger W. Dijkstra"
+    - text: "Make it work, make it right, make it fast."
+      author: "Kent Beck"
+    - text: "Programs must be written for people to read."
+      author: "Harold Abelson"

@@ -1,0 +1,14 @@
+{
+  "name": "piquote-extension",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  }
+}
