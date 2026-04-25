@@ -1,0 +1,27 @@
+{
+  "name": "piquote",
+  "version": "2026.4.25",
+  "description": "Pi extension that replaces the working message with rotating tips and quotes from YAML.",
+  "type": "module",
+  "files": [
+    "piquote/index.ts",
+    "piquote/quotes.yaml.example",
+    "piquote/README.md"
+  ],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "piquote"
+  ],
+  "pi": {
+    "extensions": [
+      "./piquote/index.ts"
+    ]
+  },
+  "dependencies": {
+    "yaml": "^2.8.1"
+  },
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  }
+}
