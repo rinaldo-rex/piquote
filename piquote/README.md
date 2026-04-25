@@ -13,7 +13,6 @@ Versioning uses CalVer: `YYYY.M.D` (for example `2026.4.25`).
 - Picks category randomly each refresh (`tips` or `quotes`)
 - Picks a random item inside that category
 - Rotation interval: `seconds = clamp(chars / 8, 3..12)`
-- In balanced mode, keeps each message visible for at least 2s after full typewriter reveal
 - If config is missing/invalid/empty: warns once, then falls back to `working...`
 
 ## Install
