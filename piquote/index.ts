@@ -89,6 +89,7 @@ export default function (pi: ExtensionAPI) {
 	let warnedConfigIssue = false;
 	let styleMode: PiquoteStyle = "balanced";
 	let currentBaseMessage = DEFAULT_WORKING_MESSAGE;
+	let effectVersion = 0;
 
 	const stopRotation = () => {
 		if (rotationTimer) {
@@ -98,8 +99,9 @@ export default function (pi: ExtensionAPI) {
 	};
 
 	const stopTextEffect = () => {
+		effectVersion++;
 		if (effectTimer) {
-			clearInterval(effectTimer);
+			clearTimeout(effectTimer);
 			effectTimer = undefined;
 		}
 	};
@@ -151,10 +153,12 @@ export default function (pi: ExtensionAPI) {
 
 	const getPulseIndicator = (ctx: ExtensionContext): WorkingIndicatorOptions => ({
 		frames: [
-			ctx.ui.theme.fg("dim", "·"),
-			ctx.ui.theme.fg("muted", "•"),
+			ctx.ui.theme.fg("dim", "◌"),
+			ctx.ui.theme.fg("muted", "○"),
+			ctx.ui.theme.fg("accent", "◍"),
 			ctx.ui.theme.fg("accent", "●"),
-			ctx.ui.theme.fg("muted", "•"),
+			ctx.ui.theme.fg("accent", "◍"),
+			ctx.ui.theme.fg("muted", "○"),
 		],
 		intervalMs: 120,
 	});
@@ -165,6 +169,7 @@ export default function (pi: ExtensionAPI) {
 
 	const startTextEffect = (ctx: ExtensionContext, baseMessage: string) => {
 		stopTextEffect();
+		const thisEffect = effectVersion;
 
 		if (styleMode === "minimal-1") {
 			ctx.ui.setWorkingMessage(baseMessage);
@@ -173,33 +178,45 @@ export default function (pi: ExtensionAPI) {
 
 		if (styleMode === "minimal-2") {
 			let frame = 0;
-			ctx.ui.setWorkingMessage(`${baseMessage} ${PROGRESS_FRAMES[frame]}`);
-			effectTimer = setInterval(() => {
+			const tick = () => {
+				if (thisEffect !== effectVersion) return;
 				if (!activeCtx || activeCtx.isIdle()) {
 					stopTextEffect();
 					return;
 				}
-				frame = (frame + 1) % PROGRESS_FRAMES.length;
 				ctx.ui.setWorkingMessage(`${baseMessage} ${PROGRESS_FRAMES[frame]}`);
-			}, 220);
+				frame = (frame + 1) % PROGRESS_FRAMES.length;
+				effectTimer = setTimeout(tick, 220);
+			};
+			tick();
+			return;
+		}
+
+		if (ctx.isIdle()) {
+			ctx.ui.setWorkingMessage(baseMessage);
 			return;
 		}
 
 		const chars = Array.from(baseMessage);
-		let index = 0;
-		ctx.ui.setWorkingMessage("");
-		effectTimer = setInterval(() => {
+		let index = Math.min(1, chars.length);
+		ctx.ui.setWorkingMessage(chars.slice(0, index).join(""));
+
+		const tick = () => {
+			if (thisEffect !== effectVersion) return;
 			if (!activeCtx || activeCtx.isIdle()) {
 				stopTextEffect();
 				return;
 			}
-
 			index = Math.min(chars.length, index + 1);
 			ctx.ui.setWorkingMessage(chars.slice(0, index).join(""));
 			if (index >= chars.length) {
 				stopTextEffect();
+				return;
 			}
-		}, 55);
+			effectTimer = setTimeout(tick, 55);
+		};
+
+		effectTimer = setTimeout(tick, 55);
 	};
 
 	const renderCurrentMessage = (ctx: ExtensionContext) => {

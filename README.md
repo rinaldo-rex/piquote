@@ -30,11 +30,13 @@ After installation, run `/reload` in Pi.
 
 ## Configuration
 
-Create:
+On install, `piquote` now auto-creates this file if missing:
 
 - `~/.pi/agent/piquote/quotes.yaml`
 
-Example:
+It never overwrites an existing file.
+
+Example content:
 
 ```yaml
 tips:

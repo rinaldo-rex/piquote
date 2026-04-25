@@ -6,6 +6,8 @@ Versioning uses CalVer: `YYYY.M.D` (for example `2026.4.25`).
 
 ## Behavior
 
+- On package install, creates `~/.pi/agent/piquote/quotes.yaml` from the example if missing (never overwrites existing file)
+
 - Reads config from: `~/.pi/agent/piquote/quotes.yaml`
 - Schema: `tips.items` and `quotes.items`
 - Picks category randomly each refresh (`tips` or `quotes`)
