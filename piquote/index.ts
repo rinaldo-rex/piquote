@@ -21,7 +21,7 @@ type LoadedConfig = {
 };
 
 const DEFAULT_WORKING_MESSAGE = "working...";
-const CONFIG_PATH = path.join(os.homedir(), ".pi", "agent", "piquote", "quotes.yaml");
+const CONFIG_PATH = path.join(os.homedir(), ".pi", "agent", "extensions", "piquote", "quotes.yaml");
 const PROGRESS_FRAMES = ["▱▱▱▱", "▰▱▱▱", "▰▰▱▱", "▰▰▰▱", "▰▰▰▰"] as const;
 const TYPEWRITER_STEP_MS = 70;
 const TYPEWRITER_CHARS_PER_STEP = 1;
@@ -387,7 +387,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand("piquote-add", {
-		description: "Add a custom quote to ~/.pi/agent/piquote/quotes.yaml under the 'custom' category. Usage: /piquote-add \"text ~author\" (author optional) or /piquote-add \"text\"",
+		description: "Add a custom quote to ~/.pi/agent/extensions/piquote/quotes.yaml under the 'custom' category. Usage: /piquote-add \"text ~author\" (author optional) or /piquote-add \"text\"",
 		handler: async (args, ctx) => {
 			const parsed = parseAddArgument(args);
 			if (!parsed) {

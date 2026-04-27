@@ -6,9 +6,9 @@ Versioning uses CalVer: `YYYY.M.D` (for example `2026.4.25`).
 
 ## Behavior
 
-- On package install, creates `~/.pi/agent/piquote/quotes.yaml` from the example if missing (never overwrites existing file)
+- On package install, creates `~/.pi/agent/extensions/piquote/quotes.yaml` from the example if missing (never overwrites existing file)
 
-- Reads config from: `~/.pi/agent/piquote/quotes.yaml`
+- Reads config from: `~/.pi/agent/extensions/piquote/quotes.yaml`
 - Schema: `tips.items`, `quotes.items`, and `custom.items`
 - Picks category randomly each refresh (`tips`, `quotes`, or `custom`)
 - Custom quotes can be added at runtime with `/piquote-add`
@@ -35,8 +35,8 @@ Then run `/reload` in Pi.
 2. Install dependency:
    - `cd ~/.pi/agent/extensions/piquote && npm install`
 3. Create config directory and file:
-   - `mkdir -p ~/.pi/agent/piquote`
-   - `cp ~/.pi/agent/extensions/piquote/quotes.yaml.example ~/.pi/agent/piquote/quotes.yaml`
+   - `mkdir -p ~/.pi/agent/extensions/piquote`
+   - `cp ~/.pi/agent/extensions/piquote/quotes.yaml.example ~/.pi/agent/extensions/piquote/quotes.yaml`
 4. In Pi, run `/reload`
 
 ## Optional commands

@@ -12,3 +12,10 @@ quotes:
       author: "Kent Beck"
     - text: "Programs must be written for people to read."
       author: "Harold Abelson"
+
+# Add your own quotes via /piquote-add "text ~author"
+# Author is optional; omit ~ to add text only
+custom:
+  items:
+    # - text: "Don't tell me you're reading all the above text!"
+    #   author: "Rex"

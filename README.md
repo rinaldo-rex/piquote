@@ -32,7 +32,7 @@ After installation, run `/reload` in Pi.
 
 On install, `piquote` now auto-creates this file if missing:
 
-- `~/.pi/agent/piquote/quotes.yaml`
+- `~/.pi/agent/extensions/piquote/quotes.yaml`
 
 It never overwrites an existing file.
 
@@ -52,8 +52,8 @@ quotes:
 You can also write it quickly with a heredoc:
 
 ```bash
-mkdir -p ~/.pi/agent/piquote
-cat > ~/.pi/agent/piquote/quotes.yaml <<'YAML'
+mkdir -p ~/.pi/agent/extensions/piquote
+cat > ~/.pi/agent/extensions/piquote/quotes.yaml <<'YAML'
 tips:
   items:
     - text: "Use /plan first for larger tasks to keep changes predictable."
@@ -79,7 +79,7 @@ YAML
 
 ## Behavior summary
 
-- Source: `~/.pi/agent/piquote/quotes.yaml`
+- Source: `~/.pi/agent/extensions/piquote/quotes.yaml`
 - Schema: `tips.items` + `quotes.items`
 - Category choice: random each refresh
 - Item choice: random within category
